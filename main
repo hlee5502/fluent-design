@@ -1,0 +1,340 @@
+
+/*
+Haejin Lee
+Data Wrangling with JSON, Fluent Design Pattern
+*/
+
+class FluentRestaurants{
+  constructor(jsonData) {
+    this.data = jsonData;
+  }
+  
+  /*
+  Method 1:
+  fromState(stateStr: string): FluentRestaurants
+  It takes a string, stateStr, and returns a new FluentRestaurants object in which all
+  restaurants are located in the given state, stateStr.*/
+  fromState(stateStr) {
+    let from_state = []; // create new data array for restaurants in the given state
+    this.data.forEach(function(cur){
+      let s = lib220.getProperty(cur, 'state'); // s represents the current restaurant's state
+      if (s.found && s.value === stateStr) { from_state.push(cur);} // if a state exists and is stateStr, then we add it to the in_state array
+    });
+    return new FluentRestaurants(from_state);
+  }
+  /*
+  Method 2:
+  ratingLeq(rating: number): FluentRestaurants
+  It takes a number, rating, and returns a new FluentRestaurants object that holds restaurants
+  with ratings less than or equal to rating.*/
+
+  ratingLeq(rating) {
+    let ratingLeq = this.data.filter(function(cur){ // ratingLeq keeps the filtered data
+      let r = lib220.getProperty(cur, 'stars'); // r represents the current restaurant cur's rating
+      return (r.found && r.value <= rating);} // if cur's rating is less than equal to given rating, then we keep it in the filtered data
+    );
+    return new FluentRestaurants(ratingLeq);
+  }
+
+  /*
+  Method 3:
+  ratingGeq(rating: number): FluentRestaurants
+  It takes a number, rating, and returns a new FluentRestaurants object that holds restaurants
+  with ratings which are greater than or equal to rating.*/
+
+  ratingGeq(rating) {
+    let ratingGeq = this.data.filter(function(cur){ // ratingGeq filters this data for the right restaurants
+      let r = lib220.getProperty(cur, 'stars'); // r represents the current restaurant cur's rating
+      return (r.found && r.value >= rating);} // if cur's rating is greater or equal to rating, we keep it in the filtered data
+    );
+    return new FluentRestaurants(ratingGeq);
+  }
+
+  /*
+  Method 4:
+  category(categoryStr: string): FluentRestaurants
+  It that takes a string, categoryStr, and produces a new FluentRestaurants object that holds
+  only those restaurants that have the provided category, categoryStr.*/
+
+  category(categoryStr) {
+    let hasCategory = this.data.filter(function(cur){
+      let c = lib220.getProperty(cur, 'categories'); // c represents the current restaurant cur's category
+      return (c.found && c.value.some(str => str === categoryStr));} // if res has the provided categoryStr then we add cur to the categories array
+    );
+    return new FluentRestaurants(hasCategory);
+  }
+
+  /*
+  Method 5:
+  hasAmbience(ambienceStr: string): FluentRestaurants
+  It takes a string, ambienceStr, and produces a new FluentRestaurants object with
+  restaurants that have the provided ambience, ambienceStr. Each restaurant object may have an
+  attributes key that may or may not contain an Ambience key, which itself is an object:
+
+  Each member of the Ambience object has a key-value pair for ambience types, and whether the
+  restaurant has that ambience or not. For a restaurant object to have a given ambience, the value
+  for that particular ambience must be true.*/
+
+  hasAmbience(ambienceStr) {
+    let hasAmbience = this.data.filter(function(cur) { // hasAmbience stores the filtered data with the given ambienceStr
+      let attr = lib220.getProperty(cur, 'attributes'); // stores cur restaurant's attributes key
+      if (attr.found){ // if there is an attributes key
+        let ambience = lib220.getProperty(attr.value, 'Ambience'); // stores cur restaurant's attribute's ambience key
+        if (ambience.found) { // if cur's attribute has an ambience
+          let m = lib220.getProperty(ambience.value, ambienceStr); // m stores the cur's ambienceStr
+          return (m.found && m.value === true); // if we find ambienceStr and the value is true we keep in the filtered data
+        }
+      }
+      return false;
+    });
+    return new FluentRestaurants(hasAmbience); // return new FluentRestaurants object with restaurants that have the specified ambienceStr
+  }
+
+  /*
+  Method 6:
+  bestPlace(): Restaurant | {}
+  It returns the “best” restaurant. The “best” restaurant has a star rating which is highest. If there
+  is a tie, pick the one with the most reviews. If there’s a tie with the most reviews, pick the first
+  restaurant. If there is no matching result, it should return an empty object.*/
+
+  bestPlace() {
+    let max = -Infinity;
+    let best = {};
+    this.data.forEach(function(cur){
+      let rating = lib220.getProperty(cur, 'stars'); // store cur restaurant's rating property
+      if(rating.found) {
+        if(rating.value > max) { // if current restaurant has higher rating than the best one so far
+          best = cur; // best is set to current restaurant
+          max = rating.value; // set max as the current restaurant's rating
+        }
+        else if (rating.value === max) { // if there is a tie in ratings
+          best = tiebreaker(best, cur, 'review_count'); // pick the one with most reviews
+          max = lib220.getProperty(best, 'stars').value; // set max as the best restaurant's rating
+        }
+      }
+    });
+    return best; // return best restaurant
+  }
+
+  /*
+  Method 7:
+  mostReviews(): Restaurant | {}
+  It returns the "most reviewed" restaurant. The "most reviewed" restaurant has a review_count
+  property with the largest value. If there is a tie, pick the one with the most stars. If there is still a
+  tie, pick the first restaurant. If there is no matching result, it should return an empty object.*/
+
+  mostReviews() {
+    let most = {};
+    let max = -Infinity;
+    this.data.forEach(function(cur) {
+      let count = lib220.getProperty(cur, 'review_count'); // count stores the review_count property for current restaurant
+      if (count.found) { // if cur has the review_count property
+        if (count.value > max) { // if the reviews is greater than the currently most reviewed
+          most = cur; // update most as cur
+          max = count.value; // max is set to the current reviews
+        }
+        else if (count.value === max) { // if the cur's reviews is tied with the most reviewed so far
+          most = tiebreaker(most, cur, 'stars'); // call tiebreaker and set most to what is returned
+          max = lib220.getProperty(most, 'review_count').value; // update max
+        }
+      }
+    });
+    return most;
+  }
+}
+
+function tiebreaker(first, second, category) {
+  let val1 = lib220.getProperty(first, category); // val1 is the first restaurant's category
+  let val2 = lib220.getProperty(second, category); // val2 is the second restaurant's category
+  if (val1.found && val2. found) { // if both restaurants store the category
+    if (val1.value >= val2.value) { // if the first restaurant's category value is greater than or equal to second restaurant's
+      return first;} // return first restaurant
+    else { return second;} // return second restaurant if not
+  }
+  else if (val2.found) { return second;} // if second restaurant has the category (but not first), then return second restaurant
+  return first; // if the first restaurant has the category or if neither does, return first restaurant
+}
+
+const testData = [
+{
+ name: "Applebee's",
+ state: "NC",
+ stars: 4,
+ review_count: 6,
+ attributes: {
+   hasTV: true,
+ },
+ categories: [
+ "Food",
+ "Restaurant",
+ "American"
+  ]
+ },
+ {
+ name: "China Garden",
+ state: "NC",
+ stars: 4,
+ review_count: 10,
+ attributes: {
+   hasTV: true,
+   Ambience: {
+     romantic: false,
+     casual: false
+   }
+ },
+ categories: [
+ "China",
+ "Garden"
+  ]
+ },
+ {
+ name: "Beach Ventures Roofing",
+ state: "AZ",
+ stars: 3,
+ review_count: 30,
+ attributes: {
+   hasTV: false,
+   Ambience: {
+     romantic: true,
+     casual: true,
+     trendy: true,
+     classy: true
+   }
+ },
+ categories: [
+ "Beach",
+ "Roofing"
+  ]
+ },
+ {
+ name: "Alpaul Automobile Wash",
+ state: "AZ",
+ stars: 3,
+ review_count: 30,
+ attributes: {
+   hasTV: true,
+   Ambience: {
+     romantic: false,
+     casual: true,
+     trendy: false
+   }
+ },
+ categories: [
+ "Cars",
+ "Carwash"
+  ]
+}
+];
+
+const testData2 = [
+{
+ name: "Applebee's",
+ state: "NC",
+ attributes: {
+   hasTV: true,
+ },
+ categories: [
+ "Food",
+ "Restaurant",
+ "American"
+  ]
+ }
+]
+
+test('hasAmbience returns correctly when no ambience found', function(){
+  let tObj = new FluentRestaurants(testData2);
+  let list = tObj.hasAmbience('casual').data;
+  assert(list.length === 0);
+});
+
+test('bestPlace and mostReviews returns correctly on no attribute', function(){
+  let tObj = new FluentRestaurants(testData2);
+  let place = tObj.mostReviews();
+  let place2 = tObj.bestPlace();
+  assert(JSON.stringify(place) === '{}');
+  assert(JSON.stringify(place2) === '{}');
+});
+
+test('fromState filters correctly', function() {
+ let tObj = new FluentRestaurants(testData);
+ let list = tObj.fromState('NC').data;
+ assert(list.length === 2);
+ assert(list[0].name === "Applebee's");
+ assert(list[1].name === "China Garden");
+});
+
+test('ratingLeq works correctly', function() {
+ let tObj = new FluentRestaurants(testData);
+ let list = tObj.ratingLeq(3).data;
+ assert(list.length === 2);
+ assert(list[0].name === "Beach Ventures Roofing");
+ assert(list[1].name === "Alpaul Automobile Wash");
+});
+
+test('ratingGeq works correctly', function() {
+ let tObj = new FluentRestaurants(testData);
+ let list = tObj.ratingGeq(4).data;
+ assert(list.length === 2);
+ assert(list[0].name === "Applebee's");
+ assert(list[1].name === "China Garden");
+});
+
+test('ratingGeq works correctly', function() {
+ let tObj = new FluentRestaurants(testData);
+ let list = tObj.ratingGeq(4).data;
+ assert(list.length === 2);
+ assert(list[0].name === "Applebee's");
+ assert(list[1].name === "China Garden");
+});
+
+test('bestPlace tie-breaking', function() {
+ let tObj = new FluentRestaurants(testData);
+ let place = tObj.fromState("NC").bestPlace();
+ assert(place.name === "China Garden");
+ let place2 = tObj.fromState("AZ").bestPlace();
+ assert(place2.name === "Beach Ventures Roofing");
+ let place3 = tObj.bestPlace();
+ assert(place3.name === "China Garden");
+});
+
+test('mostReviews tie-breaking', function() {
+ let tObj = new FluentRestaurants(testData);
+ let place = tObj.fromState("AZ").mostReviews();
+ assert(place.name === "Beach Ventures Roofing");
+ let place2 = tObj.fromState("NC").mostReviews();
+ assert(place2.name === "China Garden");
+ let place3 = tObj.mostReviews();
+ assert(place3.name === "Beach Ventures Roofing");
+});
+
+test('category works correctly', function(){
+  let tObj = new FluentRestaurants(testData);
+  let list = tObj.category("Food").data;
+  assert(list.length === 1);
+  assert(list[0].name === "Applebee's");
+});
+
+test('hasAmbience works correctly', function() {
+ let tObj = new FluentRestaurants(testData);
+ let list = tObj.hasAmbience('casual').data;
+ assert(list.length === 2);
+ assert(list[0].name === "Beach Ventures Roofing");
+ assert(list[1].name === "Alpaul Automobile Wash");
+ });
+ 
+
+let data =
+ lib220.loadJSONFromURL('https://people.cs.umass.edu/~joydeepb/yelp.json');
+let f = new FluentRestaurants(data);
+f.ratingLeq(5)
+ .ratingGeq(3)
+ .category('Restaurants')
+ .hasAmbience('casual')
+ .fromState('NV')
+ .bestPlace().name;
+f.ratingLeq(4)
+ .ratingGeq(2)
+ .category('Restaurants')
+ .hasAmbience('romantic')
+ .fromState('AZ')
+.bestPlace().name;
